@@ -9,8 +9,10 @@ import (
 	"crypto/x509"
 	"crypto/x509/pkix"
 	"encoding/base64"
+	"encoding/json"
 	"encoding/pem"
 	"errors"
+	"fmt"
 	"io"
 	"io/ioutil"
 	"net/http"
@@ -111,7 +113,21 @@ func fetchCRL(url string) (*pkix.CertificateList, error) {
 	}
 	resp.Body.Close()
 
-	return x509.ParseCRL(body)
+	message := struct {
+		Result string `json:"result"`
+	}{}
+	if err := json.Unmarshal(body, &message); err != nil {
+		fmt.Println(err)
+		return nil, errors.New("failed to read response body")
+	}
+
+	crlBytesDER, err := base64.StdEncoding.DecodeString(message.Result)
+	if err != nil {
+		fmt.Println(err)
+		return nil, errors.New("failed to decode certificate ")
+	}
+
+	return x509.ParseCRL(crlBytesDER)
 }
 
 func getIssuer(cert *x509.Certificate) *x509.Certificate {
@@ -229,7 +245,6 @@ func certIsRevokedOCSP(leaf *x509.Certificate, strict bool) (revoked, ok bool) {
 	}
 
 	issuer := getIssuer(leaf)
-
 	if issuer == nil {
 		return false, false
 	}
